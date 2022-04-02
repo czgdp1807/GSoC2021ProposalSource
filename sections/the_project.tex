@@ -1,0 +1,149 @@
+\section{The Project}
+
+In this section I would be discussing the project in detail. Specifically, I will be listing down features along with some examples, some of which are from the tests in LFortran repository. For each feature, I will also be providing some approaches and an analysis of advantages and disadvantages of one over the other.
+
+I have divided this section into three parts, the first one covers arrays, the second one covers allocatables and the third one is covering some miscellaneous goals.
+
+\subsection{Arrays}
+
+\subsubsection{Declaring Arrays}
+
+In \ref{array1} and \ref{array2}, both single dimensional and multidimensional arrays of different types are declared. Note that these arrays are explicit shaped i.e., the details of each rank consisting of lower (defaults to 1) and upper bounds are available at compile time. Recently some progress has been made in the MR, \href{https://gitlab.com/lfortran/lfortran/-/merge\_requests/722}{!722} for adding declaration of arrays. The support for specifying dimensions for arrays is already available at AST and ASR level. Hence, the only challenging part left is to define a representation of arrays at LLVM level. After some discussions, we decided to use array descriptors because of the following reasons,
+
+\begin{itemize}
+
+\item They have already been tried in the past and are currently used by GFortran. Hence, they are reliable enough to be adapted by LFortran as well.
+
+\item It is possible to represent assumed shaped arrays as well which do not have details of each dimension available at compile time. For example, while passing arrays to functions/subroutines, we can just pass the descriptor which will be having all the details about the array and can be extracted inside the function as per requirements.
+
+\item It would be possible to check if the index in an array reference is within bounds or not during runtime. Hence, we would be able to alert the end users about such issues without throwing a segmentation fault which would help them in easily debugging their Fortran codes.
+
+\end{itemize}
+
+\lstinputlisting[language=Fortran, caption=tests/array1.f90, label={array1}]{codes/array1.f90}
+\lstinputlisting[language=Fortran, caption=integration\_tests/arrays\_01.f90, label={array2}]{codes/arrays_01.f90}
+
+As of now the descriptor of an array looks similar to the C++ structure shown in \ref{descriptor}. Following are the points which summarise the meaning of each element in both the structures,
+
+\begin{itemize}
+
+\item \texttt{descriptor\_dimension::lower\_bound} - This specifies the lower bound of the dimension of an array only if the array is explicit shaped or the assumed shaped array has been allocated some space in heap memory. Otherwise it contains garbage value.
+
+\item \texttt{descriptor\_dimension::upper\_bound}  
+- Similar to the above, this specifies the upper bound of the dimension of an array. It also contains garbage value if the shape of an array is not available at compile time or is not updated during run time via allocate or during a function call.
+
+\item \texttt{descriptor\_dimension::dim\_size} - It stores the size of a particular dimension which is computed using the upper and lower bounds. This element acts as a cache since, once computed at runtime, only one LLVM instruction will suffice to obtain the size of a dimension.
+
+\item \texttt{descriptor::array} - This contains a 1D \texttt{llvm::ArrayType}. If the array is explicit shaped then the number of elements are computed by multiplying the size of each dimension at compile time. Otherwise, the number of elements are kept as 0. For arrays whose memories are reserved using \texttt{malloc}, a simple element pointer can be used to refer to the base address by defining a new descriptor structure for such arrays.
+
+\item \texttt{descriptor::offset} - This contains the offset value. As of now this is always set to 0.
+
+\item \texttt{descriptor::dim} - This is simply the array of \texttt{descriptor\_dimension} structure specifying the details of each dimension.
+ 
+\end{itemize}
+
+\lstinputlisting[language=C++, caption=Array Descriptor for LFortran, label={descriptor}]{codes/descriptor.cpp}
+
+For referring to an element inside an array, first the index values are combined using column major order (CMO) so that they are converted to appropriate index in 1D array and then the \texttt{descriptor::array} is referred using this new index. The reason for using CMO comes from the fact that Fortran uses CMO by default. However, we have planned to allow row major order (RMO) as an option as well.
+
+As of now the above design has been implemented for integer type arrays. During the project more progress will be made on real and complex type arrays.
+
+\subsubsection{Operations on Arrays}
+
+Fortran allows operations on arrays in a way similar to the python library, numpy. An example is shown in \ref{arraysop1}. There are two approaches to add support for performing operations on arrays,
+
+\lstinputlisting[language=Fortran, caption=Operations on Arrays, label={arraysop1}]{codes/array4.f90}
+
+\begin{itemize}
+
+\item \textbf{ASR Pass for array operations} - This approach involves performing an ASR pass to convert operations on arrays to a while loop over the indices of the operands. An example from one of Ondřej's comments is shown in \ref{arraysop2}.
+
+\item \textbf{Generating instructions at backend for array operations} - This approach involves checking if the operands in an expression have dimensions and then generating instructions for arrays as a special case.
+
+\end{itemize}
+
+The first method is simpler and is easy to implement without requiring any special treatment at the backend level. However, it leads to a larger ASR and avoids the scope of parallel computing by adding serialised loops by default. Though, an option can be provided for parallelizing loops and ASR pass in the first approach can be modified accordingly.
+
+Overall, in my opinion, the first approach is good to be implemented for achieving a Minimum Viable Product (MVP) as early as possible. Moreover, it will also be helpful in debugging since an operation will be clearly visible as a loop when the ASR will be printed.
+
+\lstinputlisting[language=C++, caption=ASR Pass example for Array Operation, label={arraysop2}]{codes/asr_pass_array_op.cpp}
+
+\subsubsection{Indexing Arrays}
+
+I have discussed the details of how arrays are indexed in section 2.1.1. However, ideas for using those indexed values are yet to be explained. An example of the same is shown in \ref{arraysidx1} where indexed values of arrays are used in comparison operators, assignment statements.
+
+\lstinputlisting[language=Fortran, caption=Example of Indexing Arrays in Fortran 90, label={arraysidx1}]{codes/arrays_03.f90}
+
+Support for AST and ASR level is already available in the form of \texttt{ArrayRef} node. However at the backend level, when an array is indexed, the pointer associated with that index is obtained and not the value itself. Now, the assignment statement needs pointers but binary operators require the values of array elements. Hence, it is necessary to decide when to load the value from the obtained pointer. As of now, when in an assignment statement, if an \texttt{ArrayRef} node is present on the right side then the value is loaded, otherwise not. For all other operators, load operation is always performed on the indexed pointer.
+
+Another point to be noted is that, in MR !722, I haven't added checks yet to ensure that indices are within bounds. This will be done during the course of this project.
+
+\subsubsection{Passing Arrays as Function/Subroutine Arguments}
+
+There are a couple of tests, such as \texttt{integration\_tests/arrays\_03.f90}, and \texttt{integration\_tests/arrays\_04.f90}, where LFortran fails to generate instructions for passing arrays as function/subroutine arguments. I have shown a simple example since the bug is common among all the cases where the above feature is required. Specifically, the code in \ref{pass_array} leads to the assertion failure, \texttt{void llvm::CallInst::init(...): "Calling a function with bad signature!" failed}. In order to avoid this, in my opinion we need to define some protocol to allow arrays as arguments in functions/subroutines. One way to achieve this is to pass the runtime descriptor as an array to a function/subroutine. This will be exactly similar to what we currently do for complex types since essentially we are passing a structure type as an argument. Though, we will be required to take care of the following points,
+
+\lstinputlisting[language=Fortran, caption=Passing arrays as function/subroutine arguments, label={pass_array}]{codes/arrays_pass_func.f90}
+
+\begin{itemize}
+
+\item \textbf{Rank checking at compile time} - I have noticed that GFortran doesn't allow passing arrays to functions (which accept arrays) if the rank of the input array isn't matching with the parameter. This can be done at compile time while transitioning from AST to ASR level as the number of dimensions are available during this phase of compilation.
+
+\item \textbf{Pass descriptor as a pointer} - Though Fortran standard doesn't specify the details of the passing mechanism for arrays, instead of passing the descriptor structure of an array by value, we should pass it by reference. The reason is that this allows more efficiency. However, we will be required to ensure that arrays (with \texttt{intent(in)}) aren't modified during the duration of function execution as GFortran doesn't allow it. This can be done during the AST to ASR transition phase, since we will be required to check if the array is present on the left side of an assignment statement or not.
+
+\end{itemize}
+
+The above points apply to subroutine as well, with a slight difference that in this case, we would be compelled to pass the descriptor structures by reference in order to modify the values of any array with \texttt{intent(out)}.
+
+\subsubsection{Array Initializer Expressions}
+
+An example which shows different ways in which one can use array initializer expressions in Fortran is given in \ref{array_init}. Currently, LFortran raises the exception, \texttt{LFortranException: visit\_ImpliedDoLoop() not implemented} when transitioning from AST to ASR level. In the stacktrace, \ref{array_init_stacktrace}, it can be seen that \texttt{ArrayInitializer} node internally delegates the task to \texttt{ImpliedDoLoop} and since it is not implemented the exception is raised. Hence, in my opinion, we would be required to implement the said node at ASR and backend level to make things work. In addition, I believe that this node can also be used for operations on arrays. The other way would be to remove the \texttt{ImpliedDoLoop} node and just replace it with a single while or do loop in order to keep things standardised for both the features. Also, this would simplify the task of backend since we won't be required to pay special attention to array initializers.
+
+\lstinputlisting[language=Fortran, caption=Array Initializers, label={array_init}]{codes/array_init.f90}
+
+\lstinputlisting[language=bash, caption=Array Initalizers Stacktrace from LFortran, label={array_init_stacktrace}]{codes/array_init_stacktrace}
+
+\subsubsection{Slicing Arrays}
+
+An example of slicing arrays is shown in \ref{array_slice}. As of now there is no support for this feature at ASR level and hence, consequently at backend level in the master branch. This requires implementing \texttt{FuncCallOrArray} at ASR level. I would discuss more on the algorithms part for this feature instead of the design details because the latter is already fixed and will not have much impact on the feature itself.
+
+For implementing slicing we should first note that no matter how many dimensions the array has, the result is always a 1D data structure and that too in CMO. So, if the expression is something like, \texttt{x(1:3:2, 1:3:2)} then, the result will be similar to the following order, \texttt{x(1, 1), x(3, 1), x(1, 3), x(3, 3)}. This means that to generate the list of sliced elements, first we fix the rightmost index and then recursively slice the first $n - 1$ dimensions out of the total remaining $n$ dimensions. In order to do this, one approach in my opinion is to convert the given slicing expression into a simple do loop in an ASR pass which implements the above logic. Another approach can be to implement a function in the C runtime library and use recursion to generate the sliced elements.
+
+\lstinputlisting[language=Fortran, caption=Example for Array Slicing, label={array_slice}]{codes/array_slice.f90}
+
+\subsubsection{Intrinsic Functions for Arrays}
+
+There are several intrinsic functions supported by Fortran which can be applied over arrays. Examples include, \texttt{sum}, \texttt{size}, \texttt{matmul}. Instead of discussing over the logic of how each function should be implemented, I would focus on the framework which should generalise well to any additional built-in functions we want to support for arrays,
+
+\begin{itemize}
+
+\item \textbf{Using Runtime Library} - We can use runtime library to implement functions over arrays in C by passing the descriptor structure to the C interface and implementing the logic there. We must ensure to successfully send the \texttt{llvm::ArrayType} to the runtime library.
+
+\item \textbf{Generating backend instructions using loops} - We can also treat intrinsic functions as something specialised and generate inline code for these using loops, etc. This can be done by replacing the occurrences of such built-in functions using an ASR pass and then the backend can process this new ASR without ever knowing about the existence of these functions.
+
+\item \textbf{Implementing in Fortran} - This idea comes from the discussions on supporting math library functions using \texttt{iso\_c\_binding}. Once that is done we can also implement all the intrinsic functions for arrays in Fortran itself.
+
+\end{itemize}
+
+For the long run the third idea is better, however for MVP, in my opinion we can use the first approach that is using C runtime library. We can also parallelize several functions using threads in C or by using any light weight dependency, though this is something we shouldn't care about much right now.
+
+\subsection{Allocatables}
+
+As of now, allocatables are parsed perfectly, however, ASR is not generated for them. An example is shown in \ref{allocate} which leads to the exception \texttt{LFortranException: visit\_Allocate() not implemented}. There are a couple of ways to implement this node. One approach is to just create a new type altogether for allocatables (such as \texttt{RealAllocatable}) and treat them separately by adding new code at ASR level instead of modifying the older one. An advantage of this method is that since we need to allocate memory on heap instead of stack, adding a new type would not disturb (and introduce bugs) the already existing framework which generates code for stack variables. The disadvantage is that the size of the LFortran's code base will increase a lot. Another method is to treat \texttt{allocatable} as an attribute in a way we treat other attributes. This will require adding attribute checks to not allocate memory on stack for these variables.
+
+In the LLVM backend, we would be using \texttt{llvm::CallInst::CreateMalloc} for allocating memory on heap whenever, \texttt{allocate} is called on a symbol with \texttt{allocatable} attribute.
+
+\lstinputlisting[language=Fortran, caption=Example for Allocatables in Fortran, label={allocate}]{codes/allocate.f90}
+
+\subsection{Miscellaneous Goals}
+
+Following are some examples which fail currently on the master branch of LFortran. I will try to fix these as well during the course of the project,
+
+\begin{itemize}
+
+\item \texttt{integration\_tests/arrays\_02.f90} - This test fails on master not due to a bug in arrays but due to the absence of support for \texttt{kind} function which seems like an inbuilt feature of Fortran 90 but is absent in LFortran. The exact error is \texttt{LFortranException: visit\_FuncCallOrArray() not implemented}. I will work on implementing this method probably during the later stages of the project if the bug still persists until then.
+
+\item \textbf{Adding more support for Pointers} - Support for integer pointers has already been added, though for other types, we need to perform testing on corner cases and enhancing support iteratively.
+
+\item \textbf{Corner Cases for Kind} - Kind support is almost near to completion, it needs some more testing on corner cases and fixes if there are any unnoticed failures.
+
+\end{itemize}

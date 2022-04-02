@@ -1,0 +1,11 @@
+"/home/czgdp1807ssd/lfortran_project/lfortran/src/lfortran/ast.h", line 2058, in visit_expr_t<LFortran::BodyVisitor>()
+    case exprType::ArrayInitializer: { v.visit_ArrayInitializer((const ArrayInitializer_t &)x); return; }
+  File "/home/czgdp1807ssd/lfortran_project/lfortran/src/lfortran/semantics/ast_to_asr.cpp", line 1912, in LFortran::BodyVisitor::visit_ArrayInitializer(LFortran::AST::ArrayInitializer_t const&)
+    visit_expr(*x.m_args[i]);
+  File "/home/czgdp1807ssd/lfortran_project/lfortran/src/lfortran/ast.h", line 2228, in LFortran::AST::BaseVisitor<LFortran::BodyVisitor>::visit_expr(LFortran::AST::expr_t const&)
+    void visit_expr(const expr_t &b) { visit_expr_t(b, self()); }
+  File "/home/czgdp1807ssd/lfortran_project/lfortran/src/lfortran/ast.h", line 2059, in visit_expr_t<LFortran::BodyVisitor>()
+    case exprType::ImpliedDoLoop: { v.visit_ImpliedDoLoop((const ImpliedDoLoop_t &)x); return; }
+  File "/home/czgdp1807ssd/lfortran_project/lfortran/src/lfortran/ast.h", line 2238, in LFortran::AST::BaseVisitor<LFortran::BodyVisitor>::visit_ImpliedDoLoop(LFortran::AST::ImpliedDoLoop_t const&)
+    void visit_ImpliedDoLoop(const ImpliedDoLoop_t & /* x */) { throw LFortran::LFortranException("visit_ImpliedDoLoop() not implemented"); }
+LFortranException: visit_ImpliedDoLoop() not implemented

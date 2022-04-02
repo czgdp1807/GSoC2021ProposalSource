@@ -1,0 +1,69 @@
+\section{Timeline}
+
+In this section I will be presenting a tentative plan for adding the features discussed in the previous section. I will also be including pre-GSoC, and post-GSoC periods as a part of the timeline.
+
+\subsection{Pre-GSoC Period}
+
+This period includes all the time before the beginning of community bonding phase i.e., 17$^{th}$ May, 2021. I will keep working on polishing my previous work on pointers, more support for kinds and fixing other bugs that come on the way. One such example is, \href{https://gitlab.com/lfortran/lfortran/-/issues/309}{\#309}.
+
+\subsection{GSoC Period}
+
+According to the official dates, the complete program can be divided into three parts namely, \textbf{Community Bonding Period}, \textbf{Phase - 1} and \textbf{Phase - 2}. The details of each of these is discussed in the following subsections.
+
+\subsubsection{Community Bonding Period}
+
+This part of the program starts from 17$^{th}$ May, 2021 and ends at 7$^{th}$ June, 2021 consisting of 3 weeks. The weekly plan for the duration is as follows,
+
+\begin{itemize}
+
+\item In the first week I will continue my work on adding support for declaring arrays. In my opinion a good approach to follow will be to first completely support one of the primitive types (such as \texttt{integer}) and then covering all other types following the same pattern.
+
+\item By the mid of second week, we can expect the work on declaring arrays to be almost complete. Hence, we would be able to start our work on array initialiser expressions. This will require some discussions before moving on towards the implementation of this idea. Since, it's just about choosing one of two approaches, I believe we will be able to start implementing array initialisers by the end of this week.
+
+\item In the third week, I will continue working on array initialisers. We will also start discussions on adding support for performing operations on arrays. Since this is an important feature, I will prefer to spend at least half of this week discussing various ways in which this feature can be implemented.
+
+\end{itemize}
+
+Overall, by the end of the community bonding period, work on declaring arrays would be complete, and array initialisers would be in the phase of implementation. Moreover, operations on arrays would be under discussions.
+
+\subsubsection{Phase 1}
+
+This phase starts from 7$^{th}$ June, 2021 and ends at 16$^{th}$ July, 2021, consisting of around 6 weeks. The weekly plan for the whole duration is as follows,
+
+\begin{itemize}
+
+\item By the mid of the first week, I will try to wrap up the discussions on operations on arrays. After that work on the same could be started. I will start off with implementing simple vector addition. In addition, the work on implementing array initialisers would be near to completion by the end of this week.
+
+\item In the second week and third week of this phase, I will continue working on completing operations after vector addition would be done. Since, there are a bunch of cases to cover in operations, it will take some time in testing and formalising things.
+
+\item In the third week, I will also start my work on completing support for indexing arrays such as including runtime bound checks. This will require a good amount of testing to be performed to ensure that correct values are affected for given indices.
+
+\item In the fourth week, work on slicing arrays could be started. Since, this is more of an algorithmic and implementation focused task, not much discussions would be needed on this.
+
+\item By the beginning of fifth week, operations, indexing features for arrays would be near to completion and slicing implementation would be underway. Starting from mid of this week, we will discuss various approaches for allowing arrays to be passed as functions/subroutine arguments.
+
+\item During sixth week, which is basically evaluation period as well, we will focus on discussing passing arrays as function/subroutine arguments extensively so that we have solid implementation ideas for the next phase.
+
+\end{itemize}
+
+\subsubsection{Phase 2}
+
+This would be the final phase of the program starting from 19$^{th}$ July, 2021 and ending on 23$^{rd}$ August, 2021 consisting of 5 weeks. The weekly plan for this duration is as follows,
+
+\begin{itemize}
+
+\item In the first week, we will be in a position to start implementing support for passing arrays as function/subroutine arguments. I will also start discussing finding a good way to implement a framework for intrinsic functions for arrays.
+
+\item During the second week, I will continue working on passing array as function arguments and would try to bring it near to completion. Moreover, by the mid of this week we will be able to start implementing support for intrinsic functions for arrays as well.
+
+\item During the third week, I will be working on intrinsic functions and discussions on allocatables would be underway.
+
+\item With the starting of the fourth week, I would start implementing allocatables. I will continue this till the end of the fifth week.
+
+\end{itemize}
+
+Overall, I have tried to provide a plan to fully accommodate the requirements of the program i.e., work equivalent to 20 hours per week. If needed I will try to shift some work from phase 1 to community bonding period to speed up the achievements of goals.
+
+\subsection{Post-GSoC Period}
+
+After GSoC, I will continue working on LFortran to make the release of MVP possible. After that, I will give time to adding optimisation features at ASR and backend level. Converting code from ASR to other languages such as C++, Python is also an interesting direction and I would like to work on it.
